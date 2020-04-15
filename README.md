@@ -146,3 +146,5 @@ public class Main {
 ```
 
 The new `multiply` method is nearly identical to the old one. Other than removing `static`, the only other change was removing `lhs` from the parameter list and changing it to `this` in the method body. If we think of `alpha.multiply(bravo)` as shorthand for `Rational.multiply(alpha, bravo)`, then the method header of `static Rational multiply(Rational lhs, Rational rhs)` is *almost* equivalent to `Rational multiply(Rational this, Rational rhs)`. The only difference is that non-`static` methods use *dynamic dispatch*. Recall that this means the actual method invoked depends on the *run-time type* of the caller.
+
+Next, we'll look at overriding the `toString` method.
