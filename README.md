@@ -147,4 +147,50 @@ public class Main {
 
 The new `multiply` method is nearly identical to the old one. Other than removing `static`, the only other change was removing `lhs` from the parameter list and changing it to `this` in the method body. If we think of `alpha.multiply(bravo)` as shorthand for `Rational.multiply(alpha, bravo)`, then the method header of `static Rational multiply(Rational lhs, Rational rhs)` is *almost* equivalent to `Rational multiply(Rational this, Rational rhs)`. The only difference is that non-`static` methods use *dynamic dispatch*. Recall that this means the actual method invoked depends on the *run-time type* of the caller.
 
-Next, we'll look at overriding the `toString` method.
+## Overriding the `toString` method
+As we have discussed, every class in Java ultimately extends `Object`, and so every class inherits some `toString` method. Since `Object`'s `toString` just returns a `String` with the name of the class and its hash code, we will usually want to override `toString`. Recall that *overloading* refers to multiple methods having the same name but different signatures, while *overriding* refers to "changing the definition," if you will, of a method inherited from a superclass.
+
+When overriding a method, always use the annotation `@Override`. If you make a mistake, for example by attempting to override a method that wasn't inherited or getting the method signature incorrect, the compiler will raise an error altering you to the mistake. Otherwise, the code will compile, but most likely will not behave the way the you expect it to.
+
+In our case, actually implementing `toString` is pretty easy. In fact, we pretty much already have the code.
+
+```java
+public class Rational {
+    public int num;
+    public int den;
+
+    public Rational(int n, int d) {
+        this.num = n;
+        this.den = d;
+    }
+
+    public Rational multiply(Rational rhs) {
+        int n = this.num * rhs.num;
+        int d = this.den * rhs.den;
+        return new Rational(n, d);
+    }
+
+    @Override
+    public String toString() {
+        return this.num + "/" + this.den;
+    }
+}
+```
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        Rational alpha = new Rational(1, 2);
+        Rational bravo = new Rational(3, 5);
+
+        Rational charlie = alpha.multiply(bravo);
+        System.out.println(charlie);
+    }
+}
+```
+
+We moved the logic using `+` that was previously in the `println` call in `main` to our new `toString` method. Don't forget `@Override`! When one of the operands of the `+` operator is a `String`, Java will convert the other operand to a `String` and "glue them together." For example `7 + "foo" ==> "7foo"`. The fancy term for the gluing process is *concatenation*.
+
+We don't need to explicitly invoke `toString` on `charlie` when we pass it to `println` because `println` will do that automatically.
+
+Note that if you need to build a `String` out of more than a handful of pieces, string concatenation isn't the best strategy. This is because `String`s are immutable in Java, meaning that once they are created, their contents cannot be changed. When we glue two `String`s together, we are actually creating an entirely new `String` object. Repeating this process many times for intermediate values wastes time and memory, so use Java's `StringBuilder` class instead.
