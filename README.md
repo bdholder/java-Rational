@@ -185,6 +185,7 @@ public class Main {
 
         Rational charlie = alpha.multiply(bravo);
         System.out.println(charlie);
+
     }
 }
 ```
@@ -194,3 +195,99 @@ We moved the logic using `+` that was previously in the `println` call in `main`
 We don't need to explicitly invoke `toString` on `charlie` when we pass it to `println` because `println` will do that automatically.
 
 Note that if you need to build a `String` out of more than a handful of pieces, string concatenation isn't the best strategy. This is because `String`s are immutable in Java, meaning that once they are created, their contents cannot be changed. When we glue two `String`s together, we are actually creating an entirely new `String` object. Repeating this process many times for intermediate values wastes time and memory, so use Java's `StringBuilder` class instead.
+
+## Implementing `reduce`
+We want a method that reduces our `Rational` to its lowest terms. To do this, we need to determine the *greatest common divisor*, or *GCD*, of the numerator and denominator. The *GCD* of a pair of integers, *a* and *b*, is the largest integer that evenly divides both *a* and *b*.
+
+For our discussion here, we will assume that both `num` and `den` are positive integers.
+
+The simplest strategy to compute the GCD of the numerator and denominator would be to set a variable `d` to the value of the numerator, test whether it divides both the numerator and denominator, and decrement `d` if it does not. The following code snippet is an example of an implementation of this algorithm.
+
+```java
+int gcd(int a, int b) {
+    int d = a;
+    while (a % d != 0 || b % d != 0) {
+        d--;
+    }
+    return d;
+}
+```
+
+Clearly, the first value of `d` that divides both `num` and `den` must be the largest such integer, since we started with the largest possible value that divides `num`. The only concern is that the algorithm may loop forever. However, because 1 evenly divides any integer, the algorithm will definitely terminate, either when `d` reaches 1 or earlier.
+
+While this algorithm works, it relatively inefficient. We will use a variant of an algorithm described by the ancient Greek mathematician Euclid, called the Euclidean algorithm.
+
+Suppose we have two positive integers `a` and `b`, with `a >= b` and `b > 0`. We make the following observations. First, the greatest common divisor of an integer `m` and 0 is simply `m`, because `m * 1 == m` and `m * 0 == 0`. Second, if `d` is a divisor of `a` and `b`, and `r == a % b`, then `d` is also a divisor of `r`. The strategy of the Euclidean algorithm is to repeatedly "take remainders" until we have a remainder of 0, in which case we have found the GCD of the original integers.
+
+An example will help to clarify the process. Let's suppose that `a` and `b` are 20 and 12, respectively. We first compute `20 % 12` which is `8`. Now, 12 becomes our `a` and 8 becomes our `b`, and the process continues. `12 % 8` is 4, and `8 % 4` is 0, so 4 is the GCD of 20 and 12. We simply did
+
+```
+20 % 12 ==> 8
+12 % 8 ==> 4
+8 % 4 ==> 0
+```
+
+It's okay if the starting values are swapped; that is, if 12 is assigned to `a` and 20 assigned to `b`. They will be automatically swapped by the algorithm.
+
+```
+12 % 20 ==> 12
+20 % 12 ==> 8
+12 % 8 ==> 4
+8 % 4 ==> 0
+```
+
+We get the same answer: 4.
+
+Whenever we construct an algorithm, we want to ensure that it actually gives the correct result for every input. It's easy to "believe" that our naive algorithm works, but it is not as easy to see why the Euclidean algorithm gives the correct answer. Proving that the Euclidean algorithm always gives the correct answer is beyond the scope of this lesson, but you can probably informally convince yourself that it is correct. You can read more about the [Euclidean algorithm](https://en.wikipedia.org/wiki/Euclidean_algorithm) on Wikipedia.
+
+A general purpose implementation of the Euclidean algorithm might look as follows.
+
+```java
+int gcd(int a, int b) {
+    while (b > 0) {
+        int r = a % b;
+        a = b;
+        b = r;
+    }
+    return a;
+}
+```
+
+We can adapt this algorithm for our `Rational` class easily. We have a couple of options. One is to create a `private` method that returns the GCD of our numerator and denominator. This would be the right choice if we needed to compute the GCD in more than one place in our class, or if the algorithm were sufficiently complex that it would be more readable to place it elsewhere. As a rule of thumb, if you can't fit all the code for a method on the screen at once, you should break the method up into smaller pieces, especially if you are repeating similar segments of code.
+
+However, since we're only using this code in one place and it isn't lengthy, we'll simply keep it inside our `reduce` method.
+
+```java
+public class Rational {
+    public int num;
+    public int den;
+
+    public Rational(int num, int den) {
+        this.num = num;
+        this.den = den;
+    }
+
+    public Rational multiply(Rational rhs) {
+        int n = this.num * rhs.num;
+        int d = this.den * rhs.den;
+        return new Rational(n, d);
+    }
+
+    public void reduce() {
+        int a = this.num;
+        int b = this.den;
+        while (b > 0) {
+            int r = a % b;
+            a = b;
+            b = r;
+        }
+        this.num /= a;
+        this.den /= a;
+    }
+
+    @Override
+    public String toString() {
+        return this.num + "/" + this.den;
+    }
+}
+```
