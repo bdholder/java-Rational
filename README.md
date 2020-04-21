@@ -217,7 +217,7 @@ Clearly, the first value of `d` that divides both `num` and `den` must be the la
 
 While this algorithm works, it relatively inefficient. We will use a variant of an algorithm described by the ancient Greek mathematician Euclid, called the Euclidean algorithm.
 
-Suppose we have two positive integers `a` and `b`, with `a >= b` and `b > 0`. We make the following observations. First, the greatest common divisor of an integer `m` and 0 is simply `m`, because `m * 1 == m` and `m * 0 == 0`. Second, if `d` is a divisor of `a` and `b`, and `r == a % b`, then `d` is also a divisor of `r`. The strategy of the Euclidean algorithm is to repeatedly "take remainders" until we have a remainder of 0, in which case we have found the GCD of the original integers.
+Suppose we have two positive integers `a` and `b`, with `a >= b` and `b > 0`. We make the following observations. First, the greatest common divisor of an integer `m` and 0 is simply `m`, because `m * 1 == m` and `m * 0 == 0`. Second, if `d` is a divisor of `a` and `b`, and `r == a % b`, then `d` is also a divisor of `r`. The strategy of the Euclidean algorithm then, is to repeatedly "take remainders" until we have a remainder of 0, in which case we have found the GCD of the original integers.
 
 An example will help to clarify the process. Let's suppose that `a` and `b` are 20 and 12, respectively. We first compute `20 % 12` which is `8`. Now, 12 becomes our `a` and 8 becomes our `b`, and the process continues. `12 % 8` is 4, and `8 % 4` is 0, so 4 is the GCD of 20 and 12. We simply did
 
@@ -289,5 +289,289 @@ public class Rational {
     public String toString() {
         return this.num + "/" + this.den;
     }
+}
+```
+
+## Implementing `equals`
+The `equals` method is the trickiest of the methods to implement because it requires some understanding of how Java's type system works. The `equals` method inherited from `Object` simply tests whether two objects are identical; that is, whether they refer to the same object on the heap. We want two `Rational` objects to be considered equivalent if they represent the same rational number. If *a*/*b* and *c*/*d* are rational numbers, they are considered equivalent if and only if *ad* = *bc*.
+
+If we look at the [documentation for the class Object](https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/lang/Object.html), we can see that `Object`'s `equals` method has the signature `equals(Object)`.
+
+An easy mistake to make is to attempt to implement `equals` by writing
+
+```java
+@Override
+public boolean equals(Rational obj) {
+    // ...
+}
+```
+
+When we try to compile the code, we get an error.
+
+```
+error: method does not override or implement a method from a supertype
+```
+
+This is because our method has the signature `equals(Rational)` while `Object`'s is `equals(Object)`. If we had forgotten to tell the compiler that we intended to override a method by writing `@Override`, then the code would have compiled, but it would not work correctly.
+
+Our next attempt might look as follows.
+
+```java
+@Override
+public boolean equals(Object obj) {
+    return this.num * obj.den == this.den * obj.num;
+}
+```
+
+Now we have two errors from the compiler.
+
+```
+error: cannot find symbol
+    return this.num * obj.den == this.den * obj.num;
+                         ^
+  symbol:   variable den
+  location: variable obj of type Object
+error: cannot find symbol
+    return this.num * obj.den == this.den * obj.num;
+                                               ^
+  symbol:   variable num
+  location: variable obj of type Object
+```
+
+Hey, wha' happened? The problem is that the parameter `obj` has a compile-time (static) type of `Object`. This means that any object can be passed as an argument to our `equals` method. For example, it would be perfectly fine to write `foo.equals(new Object())` or `foo.equals("howdy")`. Since Java can only guarantee that the argument is an `Object`, the compiler will not let us assume that the `num` and `den` fields will exist.
+
+Let's try assigning `obj` to a variable of type `Rational`.
+
+```java
+@Override
+public boolean equals(Object obj) {
+    Rational other = obj;
+    return this.num * other.den == this.den * other.num;
+}
+```
+
+```
+error: incompatible types: Object cannot be converted to Rational
+    Rational other = obj;
+                     ^
+```
+
+The compiler doesn't like that either. Because `Rational` is not a supertype of `Object`, this assignment is potentially dangerous. If the compiler allowed this to happen, then we might assign something like a `String` to a `Rational`. Would that be a good idea? I don't think so!
+
+We can use the cast operator to convince the compiler to compile the code.
+
+```java
+@Override
+public boolean equals(Object obj) {
+    Rational other = (Rational) obj;
+    return this.num * other.den == this.den * other.num;
+}
+```
+
+The code finally compiles. It even works...sometimes. It works for this snippet
+
+```java
+Rational alpha = new Rational(1, 3);
+Rational bravo = new Rational(2, 6);
+System.out.println(alpha.equals(bravo));
+```
+
+The next snippet, however, throws a `ClassCastException` at run time.
+
+```java
+Rational alpha = new Rational(1, 3);
+String bravo = "foo";
+System.out.println(alpha.equals(bravo));
+```
+
+```
+Exception in thread "main" java.lang.ClassCastException: class java.lang.String cannot be cast to class Rational
+```
+
+For reference types, the cast operator `(T)`, where `T` is some type, doesn't actually do anything. It's a promise to the compiler. The compiler will not allow us to write `Rational other = obj` because it cannot guarantee that `obj` refers to a `Rational`. However, because the compiler errs on the side of caution—it would rather prohibit safe code than allow unsafe code—Java provides us a mechanism to assure the compiler that the desired operation is typesafe. When we write `(Rational) obj`, we're really telling the compiler, "I have knowledge about `obj` that you don't, and I know it contains a `Rational`, so it's okay to compile this code." The compiler still doesn't trust us completely, so wherever a cast happens, it inserts some code to check that the object actually is what we're claiming it will be. If it isn't, the program crashes with a `ClassCastException`.
+
+Our latest version of `equals` doesn't actually do anything to fix the problem that the compiler detected. We accept any `Object`, so we currently have no guarantee that `obj` holds a `Rational`. Let's see how to fix that.
+
+### `instanceof`
+The `instanceof` operator returns a `boolean` value that is `true` if the given object is an instance of the given type. For example, after executing `Rational foo = new Rational(1, 3)`, the expressions `foo instanceof Rational` and `foo instanceof Object` both evaluate to `true`. After executing `Object bar = new Object()`, the expression `bar instanceof String` evaluates to `false`.
+
+Using `instanceof` allows us to kill two birds with one stone because `null instanceof T` evaluates to `false` for any reference type `T`, so we don't have to worry about accidentally dereferencing a `null` value.
+
+Let's rewrite `equals` using `instanceof`.
+
+```java
+@Override
+public boolean equals(Object obj) {
+    if (obj instanceof Rational) {
+        Rational other = (Rational) obj;
+        return this.num * other.den == this.den * other.num;
+    } else {
+        return false;
+    }
+}
+```
+
+This code actually works the way it is supposed to. We know that the cast to `Rational` will succeed because that code is only executed if `obj instanceof Rational` evaluates to `true`, and we also know that `obj` is non-`null`, so we won't get a `NullPointerException`.
+
+We can add an optimization to our code by checking to see if `obj` refers to the same object that `this` does, but it is not strictly necessary. This optimization is useful when computing `equals` is otherwise "expensive."
+
+```java
+@Override
+public boolean equals(Object obj) {
+    if (obj == this) {
+        return true;
+    } else if (obj instanceof Rational) {
+        Rational other = (Rational) obj;
+        return this.num * other.den == this.den * other.num;
+    } else {
+        return false;
+    }
+}
+```
+
+## Implementing `add`
+`add` is really no different from `multiply`, so we'll just present the solution.
+
+```java
+public Rational add(Rational rhs) {
+    int n = this.num * rhs.den + this.den * rhs.num;
+    int d = this.den * rhs.den;
+    return new Rational(n, d);
+}
+```
+
+## Final refinements
+At this point, our `Rational` class looks like this.
+
+```java
+public class Rational {
+    public int num;
+    public int den;
+
+    public Rational(int num, int den) {
+        this.num = num;
+        this.den = den;
+    }
+
+    public Rational add(Rational rhs) {
+        int n = this.num * rhs.den + this.den * rhs.num;
+        int d = this.den * rhs.den;
+        return new Rational(n, d);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == this) {
+            return true;
+        } else if (obj instanceof Rational) {
+            Rational other = (Rational) obj;
+            return this.num * other.den == this.den * other.num;
+        } else {
+            return false;
+        }
+    }
+
+    public Rational multiply(Rational rhs) {
+        int n = this.num * rhs.num;
+        int d = this.den * rhs.den;
+        return new Rational(n, d);
+    }
+
+    public void reduce() {
+        int a = this.num;
+        int b = this.den;
+        while (b > 0) {
+            int r = a % b;
+            a = b;
+            b = r;
+        }
+        this.num /= a;
+        this.den /= a;
+    }
+
+    @Override
+    public String toString() {
+        return this.num + "/" + this.den;
+    }
+}
+```
+
+This is slightly different from the skeleton provided in `Rational.java`. Our two fields, `num` and `den`, are `public`. Let's look at why it makes sense to make them `private`.
+
+When a field has `public` access, anyone can read and write that field. It may be tempting to think that this is a convenience, but in fact it can cause problems. Our `Rational` class, like most classes, need to preserve certain *invariants*: a predicate that is always true for any instance of a class. One invariant for our `Rational` class is that the denominator of a `Rational` should never be 0, but currently, we have no way to enforce that.
+
+A user could accidentally set the denominator through careless code, making the value stored by the `Rational` object meaningless. If a bug involving `Rational` shows up somewhere in the code, it could be caused by incorrect code in the `Rational` class itself or anywhere the code is used.
+
+However, if we make `num` and `den` private, we can ensure that `den` is never set to 0, and we know that if a bug is discovered in the `Rational` class, it must involve code in the `Rational` class itself since external code cannot alter its fields.
+
+So, let's make `Rational`'s fields private.
+
+```java
+private int num;
+private int den;
+```
+
+A private class member cannot be accessed at all, not even to read it. If we try something like
+
+```java
+Rational foo = new Rational(1, 2);
+System.out.println(foo.num);
+```
+
+we get a compiler error.
+
+```
+error: num has private access in Rational
+System.out.println(foo.num);
+                      ^
+```
+
+If we want a user to be able to read these values, we need to provide *accessor methods*, sometimes called *getters*.
+
+```java
+public int numerator() {
+    return this.num;
+}
+
+public int denominator() {
+    return this.den;
+}
+```
+
+This allows a user to read the values of `num` and `den` without being able to tamper with them. We could choose to allow a user to set the values of `num` and `den` as well by providing *mutator methods* or *setters*.
+
+```java
+public void setNumerator(int n) {
+    this.num = n;
+}
+```
+
+You might wonder how this is any better than cutting out the middleman by making `num` public. In this case, there really isn't one. However, with a mutator method for `den`, we could do some validation.
+
+```java
+public void setDenominator(int d) {
+    if (d == 0) {
+        throw new IllegalArgumentException();
+    }
+
+    this.den = d;
+}
+```
+
+If the user attempts to assign 0 to a denominator, an exception will now be immediately thrown indicating that a programming error has occurred. Since it's always an error to assign 0 to a denominator, the earlier an exception related to that error can be triggered, the better, because it will make the task of discovering the root cause easier.
+
+If this validation was not present, the programming error may only manifest much later when certain `Rational` values are behaving unexpectedly.
+
+Keeping fields private and exposing them using getters or not at all is a good idea. Whether setters and getters represent good design is beyond the scope of our discussion.
+
+We won't add mutator methods to `Rational`, but let's add some validation in the constructor to prevent a user from creating a `Rational` with a denominator of 0.
+
+```java
+public Rational(int num, int den) {
+    if (den == 0) {
+        throw new IllegalArgumentException();
+    }
+    this.num = num;
+    this.den = den;
 }
 ```
